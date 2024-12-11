@@ -98,131 +98,6 @@ def create_gif_and_display(yolo_results, crop_results, output_dir, event=False):
     else:
         print(f"No detections for section: {section}")
 
-def create_aidrivemetrics_output_pred(frame_paths, model_outputs, output_folder,
-                                      crop_model_outputs = None):
-    regex_pattern = r'(\d{8}-\d{6}-\d{2}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}@[A-Za-z]+_\d+)_.*'
-
-    for idx, frame_path in enumerate(frame_paths):
-        match = re.match(regex_pattern, os.path.basename(frame_path))
-        if match:
-            base_filename = match.group(1)  # Extract the base filename
-            json_filename = f"{base_filename}_00.jpg.json"  # Add the '_00.jpg.json' suffix
-        else:
-            print(f"Filename pattern did not match for {frame_path}. Skipping...")
-            continue
-
-        # Initialize the dictionary to store the detections
-        json_data = {
-            "CapturedObjects": [],
-            "Timestamp": int(base_filename.split('_')[-1])
-        }
-
-        # Process the model output for this frame
-        result = model_outputs[idx]
-
-        sorted_boxes = sorted(result.boxes, key=lambda box: box.xyxy[0][0].item())
-
-        for obj_id, box in enumerate(sorted_boxes):
-            obj_data = {
-                "BoundingBox3D Origin X": (box.xyxy[0][0].item() + box.xyxy[0][2].item()) / 2,
-                "BoundingBox3D Origin Y": (box.xyxy[0][1].item() + box.xyxy[0][3].item()) / 2,
-                "BoundingBox3D Origin Z": 3,
-                "BoundingBox3D Extent X": 0.1,
-                "BoundingBox3D Extent Y": 1,
-                "BoundingBox3D Extent Z": 1,
-                "BoundingBox3D Orientation Quat W": 0,
-                "BoundingBox3D Orientation Quat X": 0,
-                "BoundingBox3D Orientation Quat Y": 0,
-                "BoundingBox3D Orientation Quat Z": 0,
-                "BoundingBox2D X1": box.xyxy[0][0].item(),
-                "BoundingBox2D X2": box.xyxy[0][2].item(),
-                "BoundingBox2D Y1": box.xyxy[0][1].item(),
-                "BoundingBox2D Y2": box.xyxy[0][3].item(),
-                "ObjectType": 'traffic_sign_' + TrafficSignEUSpeedLimit(box.cls.item()).name.lower(),  # Object type (class name)
-                "ObjectId": obj_id,  # Object ID
-                "Detection Score": box.conf.item()  # Detection confidence score
-            }
-
-            # Append the object data to the list
-            json_data["CapturedObjects"].append(obj_data)
-        # Write the JSON data to a file
-        output_path = os.path.join(output_folder, json_filename)
-        with open(output_path, 'w') as json_file:
-            json.dump(json_data, json_file, indent=4)
-
-    return 0
-
-def create_aidrivemetrics_output_gt(section_id, frame_paths, label_input_dir, output_folder, img_sizes,
-                                    event_based = False):
-    regex_pattern = r'(\d{8}-\d{6}-\d{2}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}@[A-Za-z]+_\d+)_.*'
-
-    for idx, frame_path in enumerate(frame_paths):
-        match = re.match(regex_pattern, os.path.basename(frame_path))
-        if match:
-            base_filename = match.group(1)
-            json_filename = f"{base_filename}_00.jpg.json"
-        else:
-            print(f"Filename pattern did not match for {frame_path}. Skipping...")
-            continue
-
-        json_data = {
-            "CapturedObjects": [],
-            "Timestamp": int(base_filename.split('_')[-1])
-        }
-
-        # Reading the txt for inputs
-        cam = 'F_MIDRANGECAM_C'
-        txt_path = os.path.join(label_input_dir, f'{base_filename}_{cam}.txt')
-        with open(txt_path, 'r') as txt_file:
-            txt_input = txt_file.readlines()
-
-        # reformat input and order by position
-        boxes = []
-        for i, line in enumerate(txt_input):
-            elements = line.strip().split()
-            box = {'BoundingBox3D Origin X': float(elements[1]) * img_sizes[i][1],
-                   'BoundingBox3D Origin Y': float(elements[2]) * img_sizes[i][0],
-                   'ObjectType': int(elements[0]),
-                   }
-            boxes.append(box)
-        sorted_boxes = sorted(boxes, key = lambda x: x['BoundingBox3D Origin X'], reverse=True)
-
-        for obj_id, box in enumerate(sorted_boxes):
-            # Lef side is dropped in this case
-            if event_based and box['BoundingBox3D Origin X'] / img_sizes[0][1] < 0.5:
-                continue
-            obj_data = {
-                "ActorName": f"TRAFFIC_LIGHT {obj_id}",
-                "ObjectId": f'{section_id}_{obj_id}',
-                "BoundingBox3D Origin X": box['BoundingBox3D Origin X'],
-                "BoundingBox3D Origin Y": box['BoundingBox3D Origin Y'],
-                "BoundingBox3D Origin Z": 3,
-                "BoundingBox3D Extent X": 0.1,
-                "BoundingBox3D Extent Y": 1,
-                "BoundingBox3D Extent Z": 1,
-                "BoundingBox3D Orientation Quat W": 0,
-                "BoundingBox3D Orientation Quat X": 0,
-                "BoundingBox3D Orientation Quat Y": 0,
-                "BoundingBox3D Orientation Quat Z": 0,
-                "ObjectType": 'traffic_sign_' + TrafficSignEUSpeedLimit(box['ObjectType']).name.lower(),
-                "Occluded": 0.0,
-                "Truncated": 0,
-                "VisibleOnImage": [
-                    "FRONT_CAMERA_120"
-                ],
-                "ClassIndex": 0,
-                "3D data": True
-            }
-
-            # Append the object data to the list
-            json_data["CapturedObjects"].append(obj_data)
-        # Write the JSON data to a file
-        output_path = os.path.join(output_folder, json_filename)
-        with open(output_path, 'w') as json_file:
-            json.dump(json_data, json_file, indent=4)
-
-    return 0
-
 class CustomBox:
     def __init__(self, cls=None, conf=None, xyxy=None):
         self.cls = cls if cls is not None else torch.tensor([])
@@ -236,9 +111,9 @@ class CustomBox:
 if __name__ == '__main__':
     create_event_based = False
     crop_model_path = 'best_model_4_FINAL_splits.pth'
-    model_path = '/home/ad.adasworks.com/adrian.bodai/deleteme_regurarly/runs/detect/yolo_speedSigns_aiMotive_open_FINAL_v12/weights/best.pt'
-    output_dir = '/home/ad.adasworks.com/adrian.bodai/traffic_sign_classificator_2_stage/YOLO_predictions/'
-    working_dir = '/home/ad.adasworks.com/adrian.bodai/deleteme_regurarly/2_stage_speed_limit_classifier/aiMotive_open_archive/aiMotive_open_FINAL_validation_splits_without_insider_data/'
+    model_path = 'i/deleteme_regurarly/runs/detect/yolo_speedSigns_aiMotive_open_FINAL_v12/weights/best.pt'
+    output_dir = '/traffic_sign_classificator_2_stage/YOLO_predictions/'
+    working_dir = '/deleteme_regurarly/2_stage_speed_limit_classifier/aiMotive_open_archive/aiMotive_open_FINAL_validation_splits_without_insider_data/'
 
     print(f'Loading model from {model_path}')
     model = YOLO(model_path)
