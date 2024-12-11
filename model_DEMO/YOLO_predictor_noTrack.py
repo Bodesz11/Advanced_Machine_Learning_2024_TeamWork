@@ -157,14 +157,3 @@ if __name__ == '__main__':
             crop_model_results.append(crop_model_results_image)
 
         create_gif_and_display(yolo_results, crop_model_results, output_dir = output_dir)
-
-        pred_output_dir = 'pred/bbox3d_body'
-        os.makedirs(os.path.join(output_dir, pred_output_dir) ,exist_ok=True)
-        create_aidrivemetrics_output_pred(section_images[section], yolo_results, os.path.join(output_dir, pred_output_dir),
-                                          crop_model_outputs=crop_model_results)
-
-        gt_output_dir = 'gt/bbox3d_body'
-        os.makedirs(os.path.join(output_dir, gt_output_dir), exist_ok=True)
-        create_aidrivemetrics_output_gt(section, section_images[section], gt_input_dir, os.path.join(output_dir, gt_output_dir),
-                                        img_sizes = [x.orig_img.shape for x in yolo_results],
-                                        event_based = create_event_based)
